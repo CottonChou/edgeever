@@ -36,6 +36,8 @@ module.exports = async function signMacApp(opts) {
   const entitlements = join(__dirname, "..", "share-extension", "EdgeEverShare.entitlements");
   const shared = ["--force", "--sign", identity, "--timestamp"];
   if (opts.keychain) shared.push("--keychain", opts.keychain);
+  // The sandbox entitlement is mandatory: PlugInKit otherwise silently rejects
+  // the extension and WeChat never shows EdgeEver in its share sheet.
   codesign([
     ...shared,
     "--options",

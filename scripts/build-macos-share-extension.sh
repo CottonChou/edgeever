@@ -21,7 +21,6 @@ esac
 
 sdk="$(xcrun --sdk macosx --show-sdk-path)"
 appex="$source_directory/dist/EdgeEverShare.appex"
-rm -rf "$appex"
 mkdir -p "$appex/Contents/MacOS"
 sed \
   -e "s/__MARKETING_VERSION__/${version}/g" \
@@ -44,9 +43,12 @@ if ! xcrun nm -u "$appex/Contents/MacOS/EdgeEverShare" | grep -q '_NSExtensionMa
   exit 1
 fi
 chmod 755 "$appex/Contents/MacOS/EdgeEverShare"
+# PlugInKit rejects share extensions without the app-sandbox entitlement.
+# Always reapply it locally; electron-builder will replace this ad-hoc signature
+# with the Developer ID signature used by release builds.
 codesign \
   --force \
-  --sign - \
+  --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" \
   --entitlements "$source_directory/EdgeEverShare.entitlements" \
   --generate-entitlement-der \
   "$appex"
