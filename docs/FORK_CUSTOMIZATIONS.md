@@ -54,15 +54,16 @@ EdgeEver 原版 App 图标采用简单的黑色手绘猫咪线条轮廓搭配纯
 * **设计构思与理念**：
   - **核心图案（A-1）**：折叠纸页构筑的屋顶轮廓（象征自部署、隐私安全与笔记天地），右侧由柔顺连贯的纸卷翻折而下，左上角点缀一抹鲜艳克莱因蓝书签缎带，表面刻有三道手绘笔记横线。
   - **3D 磨砂玻璃底托（A-2）**：承托在极具 depth 纵深感的厚层半透明磨砂玻璃 Squircle 托盘上，双层折射高光弧边、通透磨砂内部微光以及自然环境软阴影，底色为沉稳深邃的午夜暗蓝（`#061326`）。
-  - **高清原始文件**：[`docs/icon-candidates/icon-concept-fusion-a2base-a1icon-large.png`](file:///Users/caidongzhou/Documents/Codex/2026-10-26/https-github-com-tianma-if-edgeever/work/edgeever/docs/icon-candidates/icon-concept-fusion-a2base-a1icon-large.png)
+  - **高清原始文件**：[`assets/brand/edgeever-icon.png`](assets/brand/edgeever-icon.png)
   - **已应用的目标资源**：
     - 移动端 App 主图标：`apps/mobile/assets/icon.png` (1024×1024)
-    - 移动端 Android 自适应图标：`apps/mobile/assets/adaptive-icon-transparent.png`（安全边距 72%，背景色设为 `#061326`）
-    - 移动端闪屏与自适应背景：`apps/mobile/app.json`（`backgroundColor = #061326`）
+    - 移动端 Android 自适应图标：`apps/mobile/assets/adaptive-icon-transparent.png`（安全边距 72%，背景色设为 `#071522`）
+    - 移动端闪屏与自适应背景：`apps/mobile/app.json`（`backgroundColor = #071522`）
     - 桌面端主图标：`apps/desktop/assets/icon.png` (1024×1024) 与 `apps/desktop/assets/icon.icns`
     - Web / PWA 触摸图标：`apps/web/public/pwa-*.png` 与 `apps/site/public/icon-*.png`
     - macOS 应用包图标：`apps/desktop/assets/icon.icns`（全尺寸支持，达 1024 Retina）
     - Web / PWA / Site 图标：`apps/web/public/` 与 `apps/site/public/` 下的 PWA 及 Touch Icon 资源
+    - 浏览器插件与扩展商店图标：`apps/extension/public/icons/` 与 `apps/extension/store-assets/`
 
 ### 其他候选方案清单 (`docs/icon-candidates/`)
 

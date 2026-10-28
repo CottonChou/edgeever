@@ -1,1 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="EdgeEver folded note">
+  <defs>
+    <linearGradient id="paper" x1="381" y1="235" x2="662" y2="836" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFDF6"/>
+      <stop offset=".58" stop-color="#F8FAFE"/>
+      <stop offset="1" stop-color="#E8EEF9"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="762" y1="291" x2="610" y2="734" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8F1FF"/>
+      <stop offset="1" stop-color="#91B7EF"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="365" y1="345" x2="438" y2="580" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#78B4FF"/>
+      <stop offset=".46" stop-color="#287EF6"/>
+      <stop offset="1" stop-color="#0757D8"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-25%" width="170%" height="180%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <path d="M500 166 785 370q40 29 40 76v262q0 49-36 67L533 879q-19 9-38-1L227 738q-33-19-33-58V445q0-38 33-60l226-185q24-19 47-34Z" fill="#000000" opacity=".38" filter="url(#shadow)" transform="translate(10 16)"/>
+  <path d="M500 151 788 358q39 28 39 74v277q0 48-35 66L526 881q-18 9-37-1L226 751q-32-19-32-57V438q0-37 32-58l226-184q24-19 48-45Z" fill="url(#paper)"/>
+  <path d="M500 151 788 358q39 28 39 73v268q0 44-37 55L621 802V567L500 151Z" fill="url(#fold)"/>
+  <path d="M500 151 788 358q39 28 39 73v268q0 44-37 55L621 802V567L500 151Z" fill="none" stroke="#DDEAFF" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M318 362h111v286l-54-46-57 48V362Z" fill="url(#ribbon)"/>
+  <g fill="#A5BAE4">
+    <rect x="319" y="592" width="322" height="42" rx="21"/>
+    <rect x="319" y="678" width="322" height="42" rx="21"/>
+    <rect x="319" y="764" width="286" height="42" rx="21"/>
+  </g>
+</svg>
