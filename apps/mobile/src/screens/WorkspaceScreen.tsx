@@ -13,9 +13,11 @@ import {
   InteractionManager,
   Modal,
   Share as NativeShare,
+  useWindowDimensions,
   Vibration,
   View,
 } from "react-native";
+import { GestureDetector } from "react-native-gesture-handler";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Alert, Pressable, Text } from "../components/LocalizedText";
 import { ApiRequestError } from "@edgeever/client";
@@ -92,6 +94,7 @@ import {
 } from "./workspace-memo-cache";
 import { refreshWorkspaceThemeStyles, styles } from "./workspace-styles";
 import { NotesView } from "./WorkspaceNotesView";
+import { NotebookDrawer, useNotebookDrawer } from "./WorkspaceDrawer";
 import { SettingsView, type MobileLocaleMode } from "./WorkspaceSettingsView";
 import { MemoDetailModal } from "./WorkspaceMemoDetail";
 import {
@@ -168,7 +171,6 @@ export const WorkspaceScreen = ({
   const [incomingShareImages, setIncomingShareImages] = useState<MobileSharedImage[]>([]);
   const [isImportingShare, setIsImportingShare] = useState(false);
   const [notesActionsOpen, setNotesActionsOpen] = useState(false);
-  const [notebookPickerOpen, setNotebookPickerOpen] = useState(false);
   const [tagFilterPickerOpen, setTagFilterPickerOpen] = useState(false);
   const [richEditingSession, setRichEditingSession] = useState<RichEditingSession | null>(null);
   const [revisionMemo, setRevisionMemo] = useState<MemoDetail | null>(null);
@@ -187,6 +189,20 @@ export const WorkspaceScreen = ({
     toggleSelectedMemo,
     toggleVisibleSelection,
   } = useMobileWorkspaceSelection();
+  const { width: windowWidth } = useWindowDimensions();
+  const drawerWidth = Math.min(340, Math.round(windowWidth * 0.82));
+  const {
+    isOpen: notebookDrawerOpen,
+    openDrawer,
+    closeDrawer,
+    notesSwipeGesture,
+    drawerPanGesture,
+    drawerAnimatedStyle,
+    backdropAnimatedStyle,
+  } = useNotebookDrawer({
+    drawerWidth,
+    enabled: activeView === "notes" && !selectionMode && !selectedMemoId,
+  });
   const memoDraftPrefetchRef = useRef(new Map<string, Promise<MobileMemoDraft | null>>());
   const memoDraftValueRef = useRef(new Map<string, MobileMemoDraft | null>());
   const processedShareUrlRef = useRef<string | null>(null);
@@ -344,6 +360,10 @@ export const WorkspaceScreen = ({
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (notebookDrawerOpen) {
+        closeDrawer();
+        return true;
+      }
       if (selectedMemoId) {
         setSelectedMemoId(null);
         return true;
@@ -376,7 +396,7 @@ export const WorkspaceScreen = ({
       return false;
     });
     return () => subscription.remove();
-  }, [activeView, clearSelection, memoView, searchText, selectedMemoId, selectedTag, selectionMode]);
+  }, [activeView, clearSelection, closeDrawer, memoView, notebookDrawerOpen, searchText, selectedMemoId, selectedTag, selectionMode]);
 
   useEffect(() => {
     if (notebooksQuery.data && memosQuery.data) {
@@ -1254,55 +1274,59 @@ export const WorkspaceScreen = ({
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
 
       {activeView === "notes" ? (
-        <NotesView
-          activeNotebook={activeNotebook}
-          showDescendantNotes={showDescendantNotes ?? true}
-          initialSyncProgress={initialMirrorSyncProgress}
-          isLoading={notebooksQuery.isLoading || (searchActive ? searchQuery.isLoading : memosQuery.isLoading) || (isInitialMirrorStatusPending && visibleMemos.length === 0)}
-          isLoadingMore={searchActive ? searchQuery.isFetchingNextPage : memosQuery.isFetchingNextPage}
-          isRefreshing={isRefreshing}
-          memoFilterMode={memoFilterMode}
-          memoListDensity={memoListDensity}
-          memoSortMode={memoSortMode}
-          memoView={memoView}
-          memos={visibleMemos}
-          notebooks={notebooks}
-          onCreate={() => openCreateMemo()}
-          onCreateFromTemplate={canCreateMemo ? openCreateFromTemplate : undefined}
-          onClearTag={clearTagFilter}
-          onClearSelection={clearSelection}
-          onFilterModeChange={handleMemoFilterModeChange}
-          onOpenActions={() => setNotesActionsOpen(true)}
-          onOpenTagFilter={() => setTagFilterPickerOpen(true)}
-          onOpenNotebookPicker={() => setNotebookPickerOpen(true)}
-          onMemoPress={handleMemoPress}
-          onMemoLongPress={(memo) => {
-            Vibration.vibrate(8);
-            selectSingleMemo(memo.id);
-          }}
-          onLoadMore={() => {
-            const query = searchActive ? searchQuery : memosQuery;
-            if (query.hasNextPage && !query.isFetchingNextPage) {
-              void query.fetchNextPage();
-            }
-          }}
-          onRefresh={refresh}
-          onSearchTextChange={(value) => {
-            setSearchText(value);
-            clearSelection();
-          }}
-          onSetMemoView={(nextMemoView) => nextMemoView === "trash" ? showTrash() : showAllNotes()}
-          searchText={searchText}
-          selectedTag={selectedTag}
-          totalMemoCount={searchActive
-            ? searchQuery.data?.pages[0]?.totalCount ?? searchResults.length
-            : memosQuery.data?.pages[0]?.totalCount ?? memos.length}
-          selectionMode={selectionMode}
-          selectedMemoIds={selectedMemoIds}
-          error={initialMirrorSyncError ?? notebooksQuery.error ?? (searchActive ? searchQuery.error : memosQuery.error)}
-          isError={Boolean(initialMirrorSyncError) || notebooksQuery.isError || (searchActive ? searchQuery.isError : memosQuery.isError)}
-          onRetry={retryInitialSync}
-        />
+        <GestureDetector gesture={notesSwipeGesture}>
+          <View style={{ flex: 1 }}>
+            <NotesView
+              activeNotebook={activeNotebook}
+              showDescendantNotes={showDescendantNotes ?? true}
+              initialSyncProgress={initialMirrorSyncProgress}
+              isLoading={notebooksQuery.isLoading || (searchActive ? searchQuery.isLoading : memosQuery.isLoading) || (isInitialMirrorStatusPending && visibleMemos.length === 0)}
+              isLoadingMore={searchActive ? searchQuery.isFetchingNextPage : memosQuery.isFetchingNextPage}
+              isRefreshing={isRefreshing}
+              memoFilterMode={memoFilterMode}
+              memoListDensity={memoListDensity}
+              memoSortMode={memoSortMode}
+              memoView={memoView}
+              memos={visibleMemos}
+              notebooks={notebooks}
+              onCreate={() => openCreateMemo()}
+              onCreateFromTemplate={canCreateMemo ? openCreateFromTemplate : undefined}
+              onClearTag={clearTagFilter}
+              onClearSelection={clearSelection}
+              onFilterModeChange={handleMemoFilterModeChange}
+              onOpenActions={() => setNotesActionsOpen(true)}
+              onOpenTagFilter={() => setTagFilterPickerOpen(true)}
+              onOpenNotebookPicker={openDrawer}
+              onMemoPress={handleMemoPress}
+              onMemoLongPress={(memo) => {
+                Vibration.vibrate(8);
+                selectSingleMemo(memo.id);
+              }}
+              onLoadMore={() => {
+                const query = searchActive ? searchQuery : memosQuery;
+                if (query.hasNextPage && !query.isFetchingNextPage) {
+                  void query.fetchNextPage();
+                }
+              }}
+              onRefresh={refresh}
+              onSearchTextChange={(value) => {
+                setSearchText(value);
+                clearSelection();
+              }}
+              onSetMemoView={(nextMemoView) => nextMemoView === "trash" ? showTrash() : showAllNotes()}
+              searchText={searchText}
+              selectedTag={selectedTag}
+              totalMemoCount={searchActive
+                ? searchQuery.data?.pages[0]?.totalCount ?? searchResults.length
+                : memosQuery.data?.pages[0]?.totalCount ?? memos.length}
+              selectionMode={selectionMode}
+              selectedMemoIds={selectedMemoIds}
+              error={initialMirrorSyncError ?? notebooksQuery.error ?? (searchActive ? searchQuery.error : memosQuery.error)}
+              isError={Boolean(initialMirrorSyncError) || notebooksQuery.isError || (searchActive ? searchQuery.isError : memosQuery.isError)}
+              onRetry={retryInitialSync}
+            />
+          </View>
+        </GestureDetector>
       ) : null}
 
       {activeView === "settings" ? (
@@ -1357,11 +1381,17 @@ export const WorkspaceScreen = ({
         visible={Boolean(selectedMemoId)}
       />
 
-      {notebookPickerOpen ? <NotebookPickerModal
+      <NotebookDrawer
         activeNotebookId={activeNotebookId}
+        backdropAnimatedStyle={backdropAnimatedStyle}
+        drawerAnimatedStyle={drawerAnimatedStyle}
+        drawerPanGesture={drawerPanGesture}
+        drawerWidth={drawerWidth}
+        isOpen={notebookDrawerOpen}
+        memoView={memoView}
         notebooks={notebooks}
-        onClose={() => setNotebookPickerOpen(false)}
-        onCreate={async (name, parentId) => {
+        onClose={closeDrawer}
+        onCreateNotebook={async (name, parentId) => {
           if (!client) {
             throw new Error("连接尚未就绪");
           }
@@ -1380,13 +1410,24 @@ export const WorkspaceScreen = ({
           }
           return notebook.id;
         }}
-        onSelect={(notebookId) => {
+        onSelectAllNotes={() => {
           setSelectedTag(null);
-          setActiveNotebookId(notebookId);
-          setNotebookPickerOpen(false);
+          setMemoView("notebook");
+          setActiveNotebookId(ALL_NOTES_ID);
+          closeDrawer();
         }}
-        visible
-      /> : null}
+        onSelectNotebook={(notebookId) => {
+          setSelectedTag(null);
+          setMemoView("notebook");
+          setActiveNotebookId(notebookId);
+          closeDrawer();
+        }}
+        onSelectTrash={() => {
+          showTrash();
+          closeDrawer();
+        }}
+        totalNotesCount={memosQuery.data?.pages[0]?.totalCount ?? memos.length}
+      />
 
       {tagFilterPickerOpen ? <TagPickerModal
         allowCreate={false}

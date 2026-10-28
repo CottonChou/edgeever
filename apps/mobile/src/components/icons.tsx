@@ -66,6 +66,7 @@ export const List = createIcon("list");
 export const LockKeyhole = createIcon("lock");
 export const LogOut = createIcon("log-out");
 export const Moon = createIcon("moon");
+export const Menu = createIcon("menu");
 export const Merge = createIcon("git-merge");
 export const MessageSquare = createIcon("message-square");
 export const MonitorSmartphone = createIcon("smartphone");

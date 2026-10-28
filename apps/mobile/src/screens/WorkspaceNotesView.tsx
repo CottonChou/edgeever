@@ -4,7 +4,7 @@ import { DEFAULT_MEMO_TITLE, getMemoListTimestamp, getNotebookDescendantMemoCoun
 import { toggleMobileMemoFilterMode } from "@edgeever/shared/mobile-ui";
 import { FlatList, Platform, RefreshControl, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector, MouseButton, PointerType } from "react-native-gesture-handler";
-import { ActivityIndicator, Check, ChevronDown, ChevronLeft, LayoutTemplate, MoreHorizontal, Plus, RotateCcw, Search, Sparkles, Tag, X } from "../components/icons";
+import { ActivityIndicator, Check, ChevronDown, ChevronLeft, LayoutTemplate, Menu, MoreHorizontal, Plus, RotateCcw, Search, Sparkles, Tag, X } from "../components/icons";
 import { Pressable, Text, TextInput } from "../components/LocalizedText";
 import type { MobileBootstrapProgress } from "../lib/local-mirror";
 import { useMobileLocale, getMobileCatalog } from "../lib/mobile-locale";
@@ -121,12 +121,16 @@ export const NotesView = ({
         ) : null}
         <View style={styles.mobileListTitleRow}>
           <Pressable
-            accessibilityLabel={memoView === "trash" || selectedTag ? "返回笔记列表" : "切换笔记本"}
+            accessibilityLabel={memoView === "trash" || selectedTag ? "返回笔记列表" : "打开笔记本侧边栏"}
             accessibilityRole="button"
             onPress={memoView === "trash" ? () => onSetMemoView("notebook") : selectedTag ? onClearTag : onOpenNotebookPicker}
             style={styles.mobileNotebookTitleButton}
           >
-            {memoView === "trash" || selectedTag ? <ChevronLeft color="#475569" size={18} /> : null}
+            {memoView === "trash" || selectedTag ? (
+              <ChevronLeft color="#475569" size={18} />
+            ) : (
+              <Menu color="#059669" size={19} style={{ marginRight: 2 }} />
+            )}
             <Text numberOfLines={1} style={styles.mobileNotebookTitle}>
               {memoView === "trash" ? "回收站" : selectedTag ? `#${selectedTag}` : activeNotebook?.name ?? "全部笔记"}
             </Text>

@@ -222,3 +222,25 @@ export const formatRevisionActor = (actor: string) => {
 
   return actor || "system";
 };
+
+export interface DrawerDragParams {
+  translationX: number;
+  velocityX: number;
+  drawerWidth: number;
+  isCurrentlyOpen: boolean;
+}
+
+export const resolveDrawerDrag = ({
+  translationX,
+  velocityX,
+  drawerWidth,
+  isCurrentlyOpen,
+}: DrawerDragParams): boolean => {
+  if (!isCurrentlyOpen) {
+    // Opening: swiped right past 22% of drawer width or fast flick right
+    return translationX > drawerWidth * 0.22 || velocityX > 350;
+  }
+  // Closing: swiped left past 22% of drawer width or fast flick left
+  const shouldClose = -translationX > drawerWidth * 0.22 || velocityX < -350;
+  return !shouldClose;
+};
