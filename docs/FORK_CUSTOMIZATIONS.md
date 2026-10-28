@@ -48,16 +48,17 @@ EdgeEver 原版 App 图标采用简单的黑色手绘猫咪线条轮廓搭配纯
 
 为此重新构思并设计了 4 套符合现代移动端 UI 规范与 EdgeEver 核心调性（翡翠绿 `#16A06E` / 知识沉淀 / 灵感连接）的高清图标方案：
 
-### 最终选定方案（方案 1 + 方案 4 融合）
-* **折纸透光磨砂大象 (Frosted Glass Origami Elephant)**：
-  - **核心设计**：结合方案 1 的多面体折纸大象头部形态（象征知识记忆与传承）与方案 4 的现代磨砂透光玻璃（Glassmorphism）材质。
-  - **视觉特征**：微透光磨砂玻璃多面体折面，棱边勾勒翡翠绿（`#16A06E`）与薄荷青蓝（Mint Cyan）霓虹边缘光辉，悬浮于深黑曜石微渐变暗色 Squircle 容器之上，并与 Android / iOS / macOS 现代系统图标规范深度对齐。
-  - **高清原始文件**：[`docs/icon-candidates/icon-concept-fusion-glass-elephant.jpg`](file:///Users/caidongzhou/Documents/Codex/2026-10-26/https-github-com-tianma-if-edgeever/work/edgeever/docs/icon-candidates/icon-concept-fusion-glass-elephant.jpg)
+### 最终选定方案：A-2 3D 厚磨砂玻璃底托 + A-1 精致折叠纸屋与蓝色书签
+* **设计构思与理念**：
+  - **核心图案（A-1）**：折叠纸页构筑的屋顶轮廓（象征自部署、隐私安全与笔记天地），右侧由柔顺连贯的纸卷翻折而下，左上角点缀一抹鲜艳克莱因蓝书签缎带，表面刻有三道手绘笔记横线。
+  - **3D 磨砂玻璃底托（A-2）**：承托在极具 depth 纵深感的厚层半透明磨砂玻璃 Squircle 托盘上，双层折射高光弧边、通透磨砂内部微光以及自然环境软阴影，底色为沉稳深邃的午夜暗蓝（`#061326`）。
+  - **高清原始文件**：[`docs/icon-candidates/icon-concept-fusion-a2base-a1icon-large.png`](file:///Users/caidongzhou/Documents/Codex/2026-10-26/https-github-com-tianma-if-edgeever/work/edgeever/docs/icon-candidates/icon-concept-fusion-a2base-a1icon-large.png)
   - **已应用的目标资源**：
     - 移动端 App 主图标：`apps/mobile/assets/icon.png` (1024×1024)
-    - 移动端 Android 自适应图标：`apps/mobile/assets/adaptive-icon-transparent.png`（背景色设为 `#0f0f17`）
-    - 移动端闪屏背景：`apps/mobile/app.json`（`expo-splash-screen.backgroundColor = #0f0f17`）
-    - 桌面端主图标：`apps/desktop/assets/icon.png` (1024×1024)
+    - 移动端 Android 自适应图标：`apps/mobile/assets/adaptive-icon-transparent.png`（安全边距 72%，背景色设为 `#061326`）
+    - 移动端闪屏与自适应背景：`apps/mobile/app.json`（`backgroundColor = #061326`）
+    - 桌面端主图标：`apps/desktop/assets/icon.png` (1024×1024) 与 `apps/desktop/assets/icon.icns`
+    - Web / PWA 触摸图标：`apps/web/public/pwa-*.png` 与 `apps/site/public/icon-*.png`
     - macOS 应用包图标：`apps/desktop/assets/icon.icns`（全尺寸支持，达 1024 Retina）
     - Web / PWA / Site 图标：`apps/web/public/` 与 `apps/site/public/` 下的 PWA 及 Touch Icon 资源
 
