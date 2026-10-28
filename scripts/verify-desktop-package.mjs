@@ -80,6 +80,23 @@ const verifyGlibcBaseline = (path, maximum = [2, 35]) => {
   assert.equal(exceedsBaseline, false, `Rust sidecar must not require glibc newer than ${maximum.join(".")}`);
 };
 
+const verifyMacSignature = (appPath) => {
+  execFileSync("codesign", ["--verify", "--deep", "--strict", "--verbose=1", appPath], {
+    stdio: "inherit",
+  });
+  if (process.env.EDGE_EVER_REQUIRE_NOTARIZED !== "1") return;
+
+  const assessment = spawnSync("spctl", ["--assess", "--type", "execute", "--verbose=4", appPath], {
+    encoding: "utf8",
+  });
+  assert.equal(
+    assessment.status,
+    0,
+    `macOS app must pass Gatekeeper assessment: ${assessment.stderr || assessment.stdout}`,
+  );
+  execFileSync("xcrun", ["stapler", "validate", appPath], { stdio: "inherit" });
+};
+
 for (const sidecarPath of files.filter((path) => /[\\/]resources[\\/]sidecar[\\/]edgeever-sidecar(?:\.exe)?$/i.test(path))) {
   const bundleRoot = sidecarPath.replace(/[\\/]resources[\\/]sidecar[\\/]edgeever-sidecar(?:\.exe)?$/i, "");
   assert.ok(existsSync(join(bundleRoot, "resources", "web", "index.html")), `Desktop bundle is missing the Web renderer: ${bundleRoot}`);
@@ -100,8 +117,10 @@ if (requestedPlatform === "darwin") {
   const appResources = join(unpackedApp, "Contents", "Resources");
   const sidecar = join(appResources, "sidecar", "edgeever-sidecar");
   assert.ok(existsSync(sidecar), `macOS app bundle is missing the sidecar: ${sidecar}`);
+  verifyMacSignature(unpackedApp);
   verifyMachOArch(executable, requestedArch, "Electron executable");
   verifyMachOArch(sidecar, requestedArch, "Rust sidecar");
+  assert.ok(statSync(sidecar).mode & 0o111, "macOS Rust sidecar must be executable");
   const shareExtension = join(unpackedApp, "Contents", "PlugIns", "EdgeEverShare.appex", "Contents", "MacOS", "EdgeEverShare");
   assert.ok(existsSync(shareExtension), `macOS app bundle is missing the WeChat share extension: ${shareExtension}`);
   verifyMachOArch(shareExtension, requestedArch, "WeChat share extension");

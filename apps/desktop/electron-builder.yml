@@ -19,6 +19,7 @@ fileAssociations:
     role: Editor
 asar: true
 beforePack: ./scripts/prepare-backup-worker.cjs
+afterPack: ./scripts/after-pack-sign.cjs
 # Cross-platform master (1024). macOS uses the prebuilt full ICNS below so Dock
 # always receives ic10/ic14 instead of electron-builder's thin 512-only pack.
 icon: assets/icon.png

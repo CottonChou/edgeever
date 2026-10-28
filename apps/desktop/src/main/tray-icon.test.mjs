@@ -32,7 +32,7 @@ describe("trayIconPath", () => {
     })).toBe("/resources/web/pwa-192x192.png");
   });
 
-  test("uses a heavier 22pt menu-bar cat instead of the padded brand mark", () => {
+  test("uses a heavier 22pt folded-note glyph instead of the padded brand mark", () => {
     const svg = readFileSync(new URL("../../assets/trayTemplate.svg", import.meta.url), "utf8");
     expect(svg).not.toContain("M9 2h14a6 6 0 0 1 6 6v16a6 6 0 0 1-6 6H9");
     expect(svg).not.toContain("scale(0.74234234)");
@@ -40,7 +40,7 @@ describe("trayIconPath", () => {
     expect(svg).toContain("fill=\"#000000\"");
     expect(svg).toContain("stroke=\"#000000\"");
     expect(svg).toContain("stroke-width=\"36\"");
-    expect(svg).toContain("scale(1.1)");
+    expect(svg).toContain("scale(1)");
   });
 
   test.each([

@@ -386,6 +386,7 @@ jobs:
         env:
           EDGE_EVER_DESKTOP_ARCH: ${{ matrix.arch }}
           EDGE_EVER_VERIFY_TARGET: darwin
+          EDGE_EVER_REQUIRE_NOTARIZED: "1"
         run: bun scripts/verify-desktop-package.mjs
 
       - name: Stage architecture-specific desktop assets

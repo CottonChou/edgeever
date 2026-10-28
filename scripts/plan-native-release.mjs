@@ -69,6 +69,7 @@ export const planNativeRelease = (platform, changedFiles) => {
           "scripts/verify-desktop-package.mjs",
           "scripts/desktop-production-files.mjs",
           "scripts/verify-desktop-production-runtime.cjs",
+          "scripts/build-desktop.mjs",
           "scripts/verify-desktop-cross-version-startup.mjs",
           "scripts/verify-packaged-desktop-startup.mjs",
           "scripts/verify-renderer-origin-migration.mjs",

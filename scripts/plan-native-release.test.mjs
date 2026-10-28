@@ -82,6 +82,7 @@ describe("native release planning", () => {
       "scripts/desktop-icns.mjs",
       "scripts/pe-imports.mjs",
       "scripts/run-desktop-builder.mjs",
+      "scripts/build-desktop.mjs",
       "scripts/sign-windows-update-manifest.mjs",
       "scripts/verify-windows-update-release.mjs",
       "scripts/verify-desktop-cross-version-startup.mjs",

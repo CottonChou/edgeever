@@ -58,3 +58,6 @@ apps/mobile/ios/
 /docs/notion-ai-feature-landscape.en-US.md
 /docs/notion-ai-feature-landscape.zh-CN.md
 release-artifacts/
+
+# Local official-release extraction used for build verification.
+work/
