@@ -73,7 +73,7 @@ bun run build:android:apk:local
 This produces `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`.
 Before upload, automation requires exactly one signer and pins its certificate
 SHA-256 to
-`22bf52a9501c89020f5acc966960152c826bfa64f31e578e858d088f8cd75d87`.
+`cb93b7637da06a3910b910d9ef7a8843fb08c8a59bc137656f8fa30cd8df8965`.
 Any other signer fails the build. Verify the application version and APK
 SHA-256 as well. Additional ABIs should only be published for an explicit
 compatibility need. The Play AAB is also intentionally limited to

@@ -186,7 +186,7 @@ describe("store delivery command", () => {
       "EDGE_EVER_ANDROID_ALLOWED_SIGNER_SHA256: ${{ secrets.ANDROID_PLAY_APP_SIGNER_SHA256 }}",
     );
     expect(workflow).not.toContain(
-      "22bf52a9501c89020f5acc966960152c826bfa64f31e578e858d088f8cd75d87",
+      "cb93b7637da06a3910b910d9ef7a8843fb08c8a59bc137656f8fa30cd8df8965",
     );
   });
 

@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const EDGE_EVER_ANDROID_SIGNER_SHA256 =
-  "22bf52a9501c89020f5acc966960152c826bfa64f31e578e858d088f8cd75d87";
+  "cb93b7637da06a3910b910d9ef7a8843fb08c8a59bc137656f8fa30cd8df8965";
 
 const normalizeFingerprint = (value) =>
   value.toLowerCase().replace(/[^0-9a-f]/g, "");
