@@ -48,7 +48,20 @@ EdgeEver 原版 App 图标采用简单的黑色手绘猫咪线条轮廓搭配纯
 
 为此重新构思并设计了 4 套符合现代移动端 UI 规范与 EdgeEver 核心调性（翡翠绿 `#16A06E` / 知识沉淀 / 灵感连接）的高清图标方案：
 
-### 设计候选方案清单 (`docs/icon-candidates/`)
+### 最终选定方案（方案 1 + 方案 4 融合）
+* **折纸透光磨砂大象 (Frosted Glass Origami Elephant)**：
+  - **核心设计**：结合方案 1 的多面体折纸大象头部形态（象征知识记忆与传承）与方案 4 的现代磨砂透光玻璃（Glassmorphism）材质。
+  - **视觉特征**：微透光磨砂玻璃多面体折面，棱边勾勒翡翠绿（`#16A06E`）与薄荷青蓝（Mint Cyan）霓虹边缘光辉，悬浮于深黑曜石微渐变暗色 Squircle 容器之上，并与 Android / iOS / macOS 现代系统图标规范深度对齐。
+  - **高清原始文件**：[`docs/icon-candidates/icon-concept-fusion-glass-elephant.jpg`](file:///Users/caidongzhou/Documents/Codex/2026-10-26/https-github-com-tianma-if-edgeever/work/edgeever/docs/icon-candidates/icon-concept-fusion-glass-elephant.jpg)
+  - **已应用的目标资源**：
+    - 移动端 App 主图标：`apps/mobile/assets/icon.png` (1024×1024)
+    - 移动端 Android 自适应图标：`apps/mobile/assets/adaptive-icon-transparent.png`（背景色设为 `#0f0f17`）
+    - 移动端闪屏背景：`apps/mobile/app.json`（`expo-splash-screen.backgroundColor = #0f0f17`）
+    - 桌面端主图标：`apps/desktop/assets/icon.png` (1024×1024)
+    - macOS 应用包图标：`apps/desktop/assets/icon.icns`（全尺寸支持，达 1024 Retina）
+    - Web / PWA / Site 图标：`apps/web/public/` 与 `apps/site/public/` 下的 PWA 及 Touch Icon 资源
+
+### 其他候选方案清单 (`docs/icon-candidates/`)
 
 | 方案 | 设计名称 | 核心寓意与风格 | 文件路径 |
 | :--- | :--- | :--- | :--- |
@@ -56,14 +69,6 @@ EdgeEver 原版 App 图标采用简单的黑色手绘猫咪线条轮廓搭配纯
 | **方案 2** | **无限流光笔记 (Infinity Notes)** | 翡翠绿与科技青蓝流光组成的莫比乌斯无限环，交织着半透明数字化笔记层，象征灵感无界与边缘端无限同步。 | `docs/icon-candidates/icon-concept-2-infinity-notes.jpg` |
 | **方案 3** | **晶体羽毛笔 (Crystal Quill)** | 晶莹剔透的水晶钢笔笔尖，在深墨玉折角信笺上勾勒出神经元脉络般的灵感光斑，代表深度思考与灵感记录。 | `docs/icon-candidates/icon-concept-3-crystal-quill.jpg` |
 | **方案 4** | **悬浮透光 E 阶 (Modern 'E' Layers)** | 3 层极简发光磨砂玻璃卡片悬浮组合成字母「E」，边缘泛着翡翠霓虹微光，象征结构化卡片与现代化笔记层级。 | `docs/icon-candidates/icon-concept-4-modern-e-layers.jpg` |
-
-### 图标替换与应用指引
-用户确定选定方案后，可按如下步骤应用到客户端打包资源中：
-1. **移动端 (Android / iOS)**：
-   - 将选中的设计文件转换为 1024×1024 PNG。
-   - 替换 `apps/mobile/assets/icon.png` 和 `apps/mobile/assets/adaptive-icon-transparent.png`。
-2. **桌面端 (macOS / Windows)**：
-   - 替换 `apps/desktop/assets/icon.png` 并通过工具生成 `apps/desktop/assets/icon.icns`。
 
 ---
 
