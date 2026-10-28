@@ -48,7 +48,7 @@ import {
 import { useMobileNoteImagePreferences } from "../hooks/useMobileNoteImagePreferences";
 import { useMobileRichEditor, type MobileMemoUpdateMutation } from "../hooks/useMobileRichEditor";
 import type { MobileMemoDraft } from "../lib/mobile-drafts";
-import { createMobileDataScope } from "../lib/local-mirror";
+import { createMobileDataScope, getLocalMemo } from "../lib/local-mirror";
 import { useMobileTheme } from "../lib/mobile-theme";
 import { useSession } from "../lib/session";
 import { beginEditorStartup } from "../lib/startup-performance";
@@ -436,6 +436,7 @@ export const MemoDetailModal = ({
   isSaving,
   isSharing,
   memo,
+  memos,
   notebookName,
   notebooks,
   onAdoptCloudVersion,
@@ -451,6 +452,7 @@ export const MemoDetailModal = ({
   onResolveSyncConflict,
   onRetrySync,
   onRestore,
+  onSelectMemoId,
   onShare,
   syncError,
   syncStatus,
@@ -471,6 +473,7 @@ export const MemoDetailModal = ({
   isSaving: boolean;
   isSharing: boolean;
   memo: MemoDetail | null;
+  memos?: Array<{ id: string; title: string | null }>;
   notebookName: string;
   notebooks: Notebook[];
   onAdoptCloudVersion: (memo: MemoDetail) => void;
@@ -486,6 +489,7 @@ export const MemoDetailModal = ({
   onResolveSyncConflict: (memo: MemoDetail) => void;
   onRetrySync: () => void;
   onRestore: (memo: MemoDetail) => void;
+  onSelectMemoId?: (memoId: string) => void;
   onShare: (memo: MemoDetail) => void;
   syncError: string | null;
   syncStatus: MobileSyncQueueItem["status"] | null;
@@ -508,6 +512,9 @@ export const MemoDetailModal = ({
     images: PreviewImageItem[];
     index: number;
   } | null>(null);
+  const previewMemoIdRef = useRef<string | null>(null);
+  const [previewNoteTitle, setPreviewNoteTitle] = useState<string | null>(null);
+  const memoImagesCacheRef = useRef<Map<string, PreviewImageItem[]>>(new Map());
   const [resourceTarget, setResourceTarget] = useState<MobileResourceTarget | null>(null);
   const [viewerReady, setViewerReady] = useState(false);
   const [titleCollapsed, setTitleCollapsed] = useState(false);
@@ -717,6 +724,12 @@ export const MemoDetailModal = ({
           activeIndex = 0;
         }
 
+        previewMemoIdRef.current = memo?.id ?? null;
+        setPreviewNoteTitle(localizeUntitledMemoTitle(memo?.title, resolvedLocale));
+        if (memo?.id && images.length > 0) {
+          memoImagesCacheRef.current.set(memo.id, images);
+        }
+
         setImagePreview({
           alt: images[activeIndex].alt || alt,
           source: images[activeIndex].source || source,
@@ -740,6 +753,64 @@ export const MemoDetailModal = ({
   const searchMatchLabel = searchQuery.trim()
     ? `${searchMatchCount > 0 ? activeMatchIndex + 1 : 0}/${searchMatchCount}`
     : "0/0";
+
+  const closeFullscreenImagePreview = useCallback(() => {
+    const targetMemoId = previewMemoIdRef.current;
+    setImagePreview(null);
+    previewMemoIdRef.current = null;
+    setPreviewNoteTitle(null);
+    if (targetMemoId && targetMemoId !== memo?.id && onSelectMemoId) {
+      onSelectMemoId(targetMemoId);
+    }
+  }, [memo?.id, onSelectMemoId]);
+
+  const handleReachBoundary = useCallback(async (direction: "next" | "prev") => {
+    if (!memos || memos.length === 0) return;
+    const currentId = previewMemoIdRef.current ?? memo?.id;
+    if (!currentId) return;
+
+    const currentIdx = memos.findIndex((m) => m.id === currentId);
+    if (currentIdx < 0) return;
+
+    const step = direction === "next" ? 1 : -1;
+    let idx = currentIdx + step;
+
+    while (idx >= 0 && idx < memos.length) {
+      const candidate = memos[idx];
+      let candidateImages = memoImagesCacheRef.current.get(candidate.id);
+      if (!candidateImages) {
+        try {
+          const scope = createMobileDataScope(session?.baseUrl ?? baseUrl, session?.user?.id);
+          const full = await getLocalMemo(scope, candidate.id) ?? (client ? (await client.getMemo(candidate.id)).memo : null);
+          if (full?.contentJson) {
+            candidateImages = extractImagesFromTiptapDoc(full.contentJson);
+            memoImagesCacheRef.current.set(candidate.id, candidateImages);
+          }
+        } catch {
+          // Ignore retrieval failure
+        }
+      }
+
+      if (candidateImages && candidateImages.length > 0) {
+        previewMemoIdRef.current = candidate.id;
+        setPreviewNoteTitle(localizeUntitledMemoTitle(candidate.title, resolvedLocale));
+        const targetIndex = direction === "next" ? 0 : candidateImages.length - 1;
+        setImagePreview({
+          alt: candidateImages[targetIndex].alt || "",
+          source: candidateImages[targetIndex].source,
+          images: candidateImages,
+          index: targetIndex,
+        });
+        return;
+      }
+      idx += step;
+    }
+  }, [baseUrl, client, memo?.id, memos, resolvedLocale, session]);
+
+  const currentPreviewId = previewMemoIdRef.current ?? memo?.id;
+  const currentMemoIdx = memos && currentPreviewId ? memos.findIndex((m) => m.id === currentPreviewId) : -1;
+  const canNavigateNextNote = Boolean(memos && currentMemoIdx >= 0 && currentMemoIdx < memos.length - 1);
+  const canNavigatePrevNote = Boolean(memos && currentMemoIdx > 0);
   const syncStatusLabel = isSaving || syncStatus === "syncing"
     ? "保存中"
     : syncStatus === "conflict"
@@ -844,7 +915,13 @@ export const MemoDetailModal = ({
     setSearchQuery(normalizedInitialSearchQuery);
     setBodySearchMatchCount(0);
     setActiveMatchIndex(0);
-    setImagePreview(null);
+    if (previewMemoIdRef.current && memo?.id === previewMemoIdRef.current) {
+      // Retain imagePreview when the active memo updates to the previewed memo
+    } else {
+      setImagePreview(null);
+      previewMemoIdRef.current = null;
+      setPreviewNoteTitle(null);
+    }
     setResourceTarget(null);
     setViewerNotebookPickerOpen(false);
     setViewerTagsOpen(false);
@@ -1898,7 +1975,7 @@ export const MemoDetailModal = ({
             visible={aiAssistantOpen}
           />
         ) : null}
-        <Modal animationType="fade" onRequestClose={() => setImagePreview(null)} transparent visible={Boolean(imagePreview)}>
+        <Modal animationType="fade" onRequestClose={closeFullscreenImagePreview} transparent visible={Boolean(imagePreview)}>
           <View style={resourceImageStyles.previewBackdrop}>
             {imagePreview ? (
               <ZoomableImagePreview
@@ -1908,10 +1985,12 @@ export const MemoDetailModal = ({
                   (imagePreview.images[imagePreview.index]?.alt || imagePreview.alt) ||
                   getMobileCatalog(resolvedLocale).mobile.imageShare.preview
                 }
+                canNavigateNext={canNavigateNextNote}
+                canNavigatePrevious={canNavigatePrevNote}
                 currentIndex={imagePreview.index}
                 images={imagePreview.images}
                 nextImageLabel={getMobileCatalog(resolvedLocale).mobile.memoDetail.nextImage}
-                previousImageLabel={getMobileCatalog(resolvedLocale).mobile.memoDetail.previousImage}
+                noteTitle={previewNoteTitle}
                 onIndexChange={(nextIndex) => {
                   setImagePreview((previous) => {
                     if (!previous || !previous.images[nextIndex]) return previous;
@@ -1924,6 +2003,8 @@ export const MemoDetailModal = ({
                     };
                   });
                 }}
+                onReachBoundary={handleReachBoundary}
+                previousImageLabel={getMobileCatalog(resolvedLocale).mobile.memoDetail.previousImage}
                 onLongPress={() => {
                   // Long-press fullscreen preview → same resource sheet as ⋯ in the note.
                   const activeItem = imagePreview.images[imagePreview.index] ?? imagePreview;
@@ -1953,7 +2034,7 @@ export const MemoDetailModal = ({
             <Pressable
               accessibilityLabel={getMobileCatalog(resolvedLocale).mobile.memoDetail.closeImagePreview}
               accessibilityRole="button"
-              onPress={() => setImagePreview(null)}
+              onPress={closeFullscreenImagePreview}
               style={resourceImageStyles.previewClose}
             >
               <X color="#ffffff" size={24} />

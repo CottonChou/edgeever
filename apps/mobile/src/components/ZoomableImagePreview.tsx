@@ -17,10 +17,14 @@ import {
 type Props = {
   accessibilityHint: string;
   accessibilityLabel: string;
+  canNavigateNext?: boolean;
+  canNavigatePrevious?: boolean;
   currentIndex?: number;
   images?: PreviewImageItem[];
   nextImageLabel?: string;
+  noteTitle?: string | null;
   onIndexChange?: (index: number) => void;
+  onReachBoundary?: (direction: "next" | "prev") => void;
   previousImageLabel?: string;
   onLongPress: () => void;
   renderImage: (onDimensions: (size: ImageSize) => void, resizeMultiplier: number) => ReactNode;
@@ -30,10 +34,14 @@ type Props = {
 export const ZoomableImagePreview = ({
   accessibilityHint,
   accessibilityLabel,
+  canNavigateNext = false,
+  canNavigatePrevious = false,
   currentIndex = 0,
   images,
   nextImageLabel,
+  noteTitle,
   onIndexChange,
+  onReachBoundary,
   onLongPress,
   previousImageLabel,
   renderImage,
@@ -123,7 +131,10 @@ export const ZoomableImagePreview = ({
         return;
       }
 
-      if (total <= 1) {
+      const hasPrev = activeIndex > 0 || Boolean(canNavigatePrevious);
+      const hasNext = activeIndex < total - 1 || Boolean(canNavigateNext);
+
+      if (total <= 1 && !canNavigatePrevious && !canNavigateNext) {
         x.value = event.translationX * 0.2;
         y.value = event.translationY * 0.2;
         return;
@@ -131,8 +142,6 @@ export const ZoomableImagePreview = ({
 
       const absX = Math.abs(event.translationX);
       const absY = Math.abs(event.translationY);
-      const hasPrev = activeIndex > 0;
-      const hasNext = activeIndex < total - 1;
 
       if (absX >= absY) {
         const isBoundary = (event.translationX > 0 && !hasPrev) || (event.translationX < 0 && !hasNext);
@@ -146,12 +155,6 @@ export const ZoomableImagePreview = ({
     })
     .onEnd((event) => {
       if (pinching.value || scale.value > 1) return;
-
-      if (total <= 1 || !onIndexChange) {
-        x.value = withTiming(0, { duration: 200 });
-        y.value = withTiming(0, { duration: 200 });
-        return;
-      }
 
       const dir = resolveSwipeDirection(event.translationX, event.translationY, event.velocityX, event.velocityY);
       const nextIndex = resolveNextPreviewIndex(activeIndex, total, dir);
@@ -177,6 +180,31 @@ export const ZoomableImagePreview = ({
             x.value = 0;
             y.value = 0;
             runOnJS(onIndexChange)(nextIndex);
+          });
+        }
+      } else if (
+        dir &&
+        onReachBoundary &&
+        ((dir === "next" && canNavigateNext) || (dir === "prev" && canNavigatePrevious))
+      ) {
+        const isHorizontal = Math.abs(event.translationX) >= Math.abs(event.translationY);
+        if (isHorizontal) {
+          const targetX = dir === "next" ? -viewport.width : viewport.width;
+          x.value = withTiming(targetX, { duration: 150 }, (finished) => {
+            if (finished === false) return;
+            opacity.value = 0;
+            x.value = 0;
+            y.value = 0;
+            runOnJS(onReachBoundary)(dir);
+          });
+        } else {
+          const targetY = dir === "next" ? -viewport.height : viewport.height;
+          y.value = withTiming(targetY, { duration: 150 }, (finished) => {
+            if (finished === false) return;
+            opacity.value = 0;
+            x.value = 0;
+            y.value = 0;
+            runOnJS(onReachBoundary)(dir);
           });
         }
       } else {
@@ -209,10 +237,11 @@ export const ZoomableImagePreview = ({
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      {total > 1 ? (
+      {total > 1 || noteTitle ? (
         <View pointerEvents="none" style={styles.counterContainer}>
           <View style={styles.counterBadge}>
-            <Text style={styles.counterText}>
+            <Text numberOfLines={1} style={styles.counterText}>
+              {noteTitle ? `${noteTitle}  ·  ` : ""}
               {`${activeIndex + 1} / ${total}`}
             </Text>
           </View>
@@ -295,6 +324,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.15)",
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
+    maxWidth: "85%",
     paddingHorizontal: 14,
     paddingVertical: 6,
   },

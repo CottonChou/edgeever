@@ -1331,6 +1331,7 @@ export const WorkspaceScreen = ({
         isSaving={updateMemoMutation.isPending || localUpdateMemoMutation.isPending}
         isSharing={shareMemoMutation.isPending}
         memo={selectedMemo}
+        memos={visibleMemos}
         notebookName={notebooks.find((notebook) => notebook.id === selectedMemo?.notebookId)?.name ?? localizeMissingNotebookName(resolvedLocale)}
         notebooks={notebooks}
         onClose={closeDetail}
@@ -1348,6 +1349,7 @@ export const WorkspaceScreen = ({
           void runForcedSync();
         }}
         onRestore={(memo) => restoreMemoMutation.mutate(memo)}
+        onSelectMemoId={(memoId) => setSelectedMemoId(memoId)}
         onShare={(memo) => shareMemoMutation.mutate(memo)}
         syncError={selectedMemoSyncError}
         syncStatus={selectedMemoSyncStatus}

@@ -73,6 +73,13 @@ describe("swipe direction and navigation resolution", () => {
     expect(resolveNextPreviewIndex(2, 3, "prev")).toBe(1);
     expect(resolveNextPreviewIndex(1, 3, null)).toBe(1);
   });
+
+  test("identifies boundary reach when next/prev index does not change", () => {
+    expect(resolveNextPreviewIndex(2, 3, "next")).toBe(2);
+    expect(resolveNextPreviewIndex(0, 3, "prev")).toBe(0);
+    expect(resolveNextPreviewIndex(0, 1, "next")).toBe(0);
+    expect(resolveNextPreviewIndex(0, 1, "prev")).toBe(0);
+  });
 });
 
 describe("extractImagesFromTiptapDoc", () => {
