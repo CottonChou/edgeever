@@ -9,6 +9,7 @@
 1. [特性 1：移动端全屏图片预览跨笔记连续滑动与退出联动](#1-特性-1移动端全屏图片预览跨笔记连续滑动与退出联动)
 2. [特性 2：App 视觉图标现代化重构与方案选集](#2-特性-2app-视觉图标现代化重构与方案选集)
 3. [特性 3：移动端右滑引出笔记本抽屉侧边栏](#3-特性-3移动端右滑引出笔记本抽屉侧边栏)
+4. [特性 4：移动端单篇笔记左滑快捷操作（星标、删除）](#4-特性-4移动端单篇笔记左滑快捷操作星标删除)
 
 ---
 
@@ -108,7 +109,45 @@ EdgeEver 原版 App 图标采用简单的黑色手绘猫咪线条轮廓搭配纯
 
 ---
 
-## 4. 上游分支同步操作建议 (Sync Guide)
+## 4. 特性 4：移动端单篇笔记左滑快捷操作（星标、删除） (Swipe Left on Note for Star & Delete)
+
+### 业务背景与问题
+- 在原版移动端笔记列表中，用户如果想要对单篇笔记进行「星标（置顶）」或「删除」操作，必须先长按笔记进入多选模式，或者点进笔记详情后才能进行操作，在日常高频整理笔记时步骤较繁琐。
+- 借鉴主流移动客户端的交互体验，用户期望直接在列表中针对单个笔记卡片向左滑动，即可快速展示「星标」和「删除」操作按钮。
+
+### 定制行为与交互规范
+1. **左滑手势与平滑展开**：
+   - 在单个笔记卡片上向左滑（`translationX < 0`），卡片平滑滑出，露出右侧的两个操作按钮：
+     - **星标（置顶 / 取消置顶）**：金黄色背景（`#d97706`），图标动态显示 `Sparkles`，文字根据当前笔记状态实时切换为「取消星标」或「星标」。
+     - **删除**：红色背景（`#ef4444`），图标显示 `Trash2`，文字为「删除」。
+   - 滑动位移阈值设定为 140px（两个按钮各 70px 宽度）。支持橡皮筋阻尼，超过阈值后具有弹性阻尼效果。
+2. **手势冲突保护**：
+   - 纵向滑动保护：`failOffsetY([-20, 20])`，上下滑动滚动笔记列表时绝不会误触发卡片横滑。
+   - 手势方向隔离：卡片向左滑（`activeOffsetX([-15, 0])`），与列表右滑呼出抽屉（`translationX > 0`）互不干扰。
+3. **点击交互与状态自动闭合**：
+   - 当卡片处于展开状态时，再次轻触卡片主体会立即收起按钮，而不会误进入笔记详情。
+   - 点击「星标」或「删除」按钮后，卡片以弹性动画自动平滑归位。
+4. **乐观更新与回收站保护**：
+   - 点击星标：前端乐观更新 React Query 缓存中的 `pinned` 状态并调用 API，无卡顿瞬间反馈。
+   - 点击删除：
+     - 普通笔记本视图下：立即从当前列表移除笔记并异步调用删除接口；
+     - 回收站视图下：弹出确认对话框提示是否永久删除，防止误触。
+
+### 涉及代码与实现改动
+* **`apps/mobile/src/screens/workspace-utils.ts`**：
+  * 新增 `resolveCardSwipe` 手势位移与展开决策算法。
+* **`apps/mobile/src/screens/workspace-styles.ts`**：
+  * 新增 `memoCardWrapper`、`memoCardWrapperCompact`、`memoSwipeActions`、`memoSwipeBtn`、`memoSwipeBtnPin`、`memoSwipeBtnDelete` 与 `memoSwipeBtnText` 样式。
+* **`apps/mobile/src/screens/WorkspaceNotesView.tsx`**：
+  * 在 `MemoCard` 内部引入 `Gesture.Pan()` 与 `useAnimatedStyle`，将底层操作按钮与上层卡片内容组合渲染，添加展开闭合状态控制与点击回调。
+* **`apps/mobile/src/screens/WorkspaceScreen.tsx`**：
+  * 新增 `handleTogglePinMemo` 与 `handleDeleteSingleMemoSummary`，配合乐观缓存更新与回收站二次确认。
+* **`apps/mobile/src/screens/workspace-drawer.test.ts`**：
+  * 补充针对 `resolveCardSwipe` 的完整单元测试，覆盖展开阈值判定、正向防误触与收起判定。
+
+---
+
+## 5. 上游分支同步操作建议 (Sync Guide)
 
 当官方上游 `upstream` 发布新版本并需要合入个人仓库时：
 ```bash

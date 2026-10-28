@@ -751,6 +751,44 @@ const baseWorkspaceStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 34,
   },
+  memoCardWrapper: {
+    borderRadius: 8,
+    marginBottom: 12,
+    overflow: "hidden",
+    position: "relative",
+  },
+  memoCardWrapperCompact: {
+    marginBottom: 10,
+  },
+  memoSwipeActions: {
+    alignItems: "stretch",
+    bottom: 0,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    position: "absolute",
+    right: 0,
+    top: 0,
+    width: 140,
+    zIndex: 0,
+  },
+  memoSwipeBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    width: 70,
+  },
+  memoSwipeBtnPin: {
+    backgroundColor: "#d97706",
+  },
+  memoSwipeBtnDelete: {
+    backgroundColor: "#ef4444",
+  },
+  memoSwipeBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 4,
+  },
   memoCard: {
     alignItems: "stretch",
     backgroundColor: "#ffffff",
@@ -758,9 +796,9 @@ const baseWorkspaceStyles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
-    marginBottom: 12,
     minHeight: 132,
     overflow: "hidden",
+    width: "100%",
   },
   memoCardCompact: {
     marginBottom: 10,

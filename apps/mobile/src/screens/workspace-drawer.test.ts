@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { resolveDrawerDrag } from "./workspace-utils";
+import { resolveCardSwipe, resolveDrawerDrag } from "./workspace-utils";
 
 describe("WorkspaceDrawer resolution logic", () => {
   const drawerWidth = 320;
@@ -62,6 +62,72 @@ describe("WorkspaceDrawer resolution logic", () => {
       translationX: -25,
       velocityX: -400,
       drawerWidth,
+      isCurrentlyOpen: true,
+    });
+    expect(result).toBe(false);
+  });
+});
+
+describe("MemoCard swipe action resolution logic", () => {
+  const actionWidth = 140;
+
+  it("opens actions when swiped left past threshold (35%)", () => {
+    // 35% of 140 = 49px
+    const result = resolveCardSwipe({
+      translationX: -55,
+      velocityX: 0,
+      actionWidth,
+      isCurrentlyOpen: false,
+    });
+    expect(result).toBe(true);
+  });
+
+  it("does not open actions when swipe left is too short with low velocity", () => {
+    const result = resolveCardSwipe({
+      translationX: -25,
+      velocityX: -100,
+      actionWidth,
+      isCurrentlyOpen: false,
+    });
+    expect(result).toBe(false);
+  });
+
+  it("opens actions on fast flick left even if distance is small", () => {
+    const result = resolveCardSwipe({
+      translationX: -20,
+      velocityX: -350,
+      actionWidth,
+      isCurrentlyOpen: false,
+    });
+    expect(result).toBe(true);
+  });
+
+  it("closes actions when swiped right past 30px while open", () => {
+    const result = resolveCardSwipe({
+      translationX: 45,
+      velocityX: 0,
+      actionWidth,
+      isCurrentlyOpen: true,
+    });
+    // result = true means stay open, false means close
+    expect(result).toBe(false);
+  });
+
+  it("stays open when dragged right less than 30px with low velocity", () => {
+    const result = resolveCardSwipe({
+      translationX: 15,
+      velocityX: 50,
+      actionWidth,
+      isCurrentlyOpen: true,
+    });
+    expect(result).toBe(true);
+  });
+
+  it("closes actions on fast flick right", () => {
+    const result = resolveCardSwipe({
+      translationX: 10,
+      velocityX: 300,
+      actionWidth,
       isCurrentlyOpen: true,
     });
     expect(result).toBe(false);

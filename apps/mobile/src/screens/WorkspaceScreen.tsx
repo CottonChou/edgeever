@@ -1065,6 +1065,24 @@ export const WorkspaceScreen = ({
   });
 
   const pinMemosMutation = useMutation({
+    onMutate: async ({ memoIds, isPinned }) => {
+      const pinSet = new Set(memoIds);
+      queryClient.setQueriesData<InfiniteData<ListMemosResponse>>(
+        { queryKey: ["mobile", "memos"] },
+        (current) => {
+          if (!current?.pages) return current;
+          return {
+            ...current,
+            pages: current.pages.map((page) => ({
+              ...page,
+              memos: page.memos.map((memo) =>
+                pinSet.has(memo.id) ? { ...memo, isPinned } : memo
+              ),
+            })),
+          };
+        }
+      );
+    },
     mutationFn: async ({ memoIds, isPinned }: { memoIds: string[]; isPinned: boolean }) => {
       if (!client) {
         throw new Error("Client is not ready");
@@ -1127,6 +1145,26 @@ export const WorkspaceScreen = ({
       },
     ]);
   };
+
+  const handleTogglePinMemo = useCallback((memo: MemoSummary) => {
+    pinMemosMutation.mutate({ memoIds: [memo.id], isPinned: !memo.isPinned });
+  }, [pinMemosMutation]);
+
+  const handleDeleteSingleMemoSummary = useCallback((memo: MemoSummary) => {
+    const permanent = memoView === "trash" || memo.isDeleted;
+    if (!permanent) {
+      deleteMemosMutation.mutate({ memoIds: [memo.id], permanent: false });
+      return;
+    }
+    Alert.alert("永久删除笔记", "这个操作不可恢复。", [
+      { text: "取消", style: "cancel" },
+      {
+        text: "永久删除",
+        style: "destructive",
+        onPress: () => deleteMemosMutation.mutate({ memoIds: [memo.id], permanent: true }),
+      },
+    ]);
+  }, [deleteMemosMutation, memoView]);
 
   const handleRenameResource = async (memo: MemoDetail, target: MobileResourceTarget, filename: string) => {
     if (!client) throw new Error("当前无法连接实例，请稍后重试");
@@ -1297,6 +1335,8 @@ export const WorkspaceScreen = ({
               onOpenActions={() => setNotesActionsOpen(true)}
               onOpenTagFilter={() => setTagFilterPickerOpen(true)}
               onOpenNotebookPicker={openDrawer}
+              onDeleteMemo={handleDeleteSingleMemoSummary}
+              onTogglePinMemo={handleTogglePinMemo}
               onMemoPress={handleMemoPress}
               onMemoLongPress={(memo) => {
                 Vibration.vibrate(8);

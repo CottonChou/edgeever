@@ -244,3 +244,25 @@ export const resolveDrawerDrag = ({
   const shouldClose = -translationX > drawerWidth * 0.22 || velocityX < -350;
   return !shouldClose;
 };
+
+export interface CardSwipeParams {
+  translationX: number;
+  velocityX: number;
+  actionWidth: number;
+  isCurrentlyOpen: boolean;
+}
+
+export const resolveCardSwipe = ({
+  translationX,
+  velocityX,
+  actionWidth,
+  isCurrentlyOpen,
+}: CardSwipeParams): boolean => {
+  if (!isCurrentlyOpen) {
+    // Opening: swiped left past 35% of action width or flick left
+    return translationX < -actionWidth * 0.35 || velocityX < -300;
+  }
+  // Closing: swiped right past 30px or flick right
+  const shouldClose = translationX > 30 || velocityX > 250;
+  return !shouldClose;
+};

@@ -1,16 +1,17 @@
-import { memo, useRef, type ReactNode } from "react";
+import { memo, useCallback, useRef, type ReactNode } from "react";
 import type { MemoFilterMode, MemoSortMode } from "@edgeever/client";
 import { DEFAULT_MEMO_TITLE, getMemoListTimestamp, getNotebookDescendantMemoCount, type MemoSummary, type Notebook } from "@edgeever/shared";
 import { toggleMobileMemoFilterMode } from "@edgeever/shared/mobile-ui";
 import { FlatList, Platform, RefreshControl, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector, MouseButton, PointerType } from "react-native-gesture-handler";
-import { ActivityIndicator, Check, ChevronDown, ChevronLeft, LayoutTemplate, Menu, MoreHorizontal, Plus, RotateCcw, Search, Sparkles, Tag, X } from "../components/icons";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import { ActivityIndicator, Check, ChevronDown, ChevronLeft, LayoutTemplate, Menu, MoreHorizontal, Plus, RotateCcw, Search, Sparkles, Tag, Trash2, X } from "../components/icons";
 import { Pressable, Text, TextInput } from "../components/LocalizedText";
 import type { MobileBootstrapProgress } from "../lib/local-mirror";
 import { useMobileLocale, getMobileCatalog } from "../lib/mobile-locale";
 import { useMobileTheme } from "../lib/mobile-theme";
 import type { MobileMemoListDensity } from "../lib/preferences";
-import { formatMemoPreviewDate } from "./workspace-utils";
+import { formatMemoPreviewDate, resolveCardSwipe } from "./workspace-utils";
 import { styles } from "./workspace-styles";
 
 type MemoView = "notebook" | "trash";
@@ -37,6 +38,8 @@ export const NotesView = ({
   onOpenActions,
   onOpenTagFilter,
   onOpenNotebookPicker,
+  onDeleteMemo,
+  onTogglePinMemo,
   onMemoLongPress,
   onMemoPress,
   onLoadMore,
@@ -72,6 +75,8 @@ export const NotesView = ({
   onOpenActions: () => void;
   onOpenTagFilter: () => void;
   onOpenNotebookPicker: () => void;
+  onDeleteMemo?: (memo: MemoSummary) => void;
+  onTogglePinMemo?: (memo: MemoSummary) => void;
   onMemoLongPress: (memo: MemoSummary) => void;
   onMemoPress: (memoId: string) => void;
   onLoadMore: () => void;
@@ -224,6 +229,8 @@ export const NotesView = ({
       memos={memos}
       onMemoLongPress={onMemoLongPress}
       onMemoPress={onMemoPress}
+      onDeleteMemo={onDeleteMemo}
+      onTogglePinMemo={onTogglePinMemo}
       onLoadMore={onLoadMore}
       onRefresh={onRefresh}
       onRetry={onRetry}
@@ -247,6 +254,8 @@ const MemoList = ({
   listDensity,
   sortMode,
   memos,
+  onDeleteMemo,
+  onTogglePinMemo,
   onMemoLongPress,
   onMemoPress,
   onLoadMore,
@@ -269,6 +278,8 @@ const MemoList = ({
   memos: MemoSummary[];
   onMemoLongPress?: (memo: MemoSummary) => void;
   onMemoPress: (memoId: string) => void;
+  onDeleteMemo?: (memo: MemoSummary) => void;
+  onTogglePinMemo?: (memo: MemoSummary) => void;
   onLoadMore?: () => void;
   onRefresh: () => void;
   onRetry?: () => void;
@@ -347,6 +358,8 @@ const MemoList = ({
             sortMode={sortMode}
             onLongPress={!selectionMode && onMemoLongPress ? () => onMemoLongPress(item) : undefined}
             onPress={() => onMemoPress(item.id)}
+            onDelete={onDeleteMemo}
+            onTogglePin={onTogglePinMemo}
             selected={selectedMemoIds.has(item.id)}
             selectionMode={selectionMode}
           />
@@ -427,12 +440,16 @@ const MobileFilterButton = ({ active, icon, label, onPress }: { active: boolean;
   </Pressable>
 );
 
+const SWIPE_ACTIONS_WIDTH = 140;
+
 const MemoCard = memo(function MemoCard({
   listDensity,
   memo,
   sortMode,
   onLongPress,
   onPress,
+  onDelete,
+  onTogglePin,
   selected = false,
   selectionMode = false,
 }: {
@@ -441,6 +458,8 @@ const MemoCard = memo(function MemoCard({
   sortMode: MemoSortMode;
   onLongPress?: () => void;
   onPress: () => void;
+  onDelete?: (memo: MemoSummary) => void;
+  onTogglePin?: (memo: MemoSummary) => void;
   selected?: boolean;
   selectionMode?: boolean;
 }) {
@@ -452,81 +471,173 @@ const MemoCard = memo(function MemoCard({
     ? getMobileCatalog(resolvedLocale).mobile.notes.created
     : getMobileCatalog(resolvedLocale).mobile.notes.updated;
   const handledLongPressRef = useRef(false);
+
+  const translateX = useSharedValue(0);
+  const isSwipedOpen = useSharedValue(false);
+
+  const closeSwipe = useCallback(() => {
+    translateX.value = withSpring(0, { damping: 20, stiffness: 220, mass: 0.8 });
+    isSwipedOpen.value = false;
+  }, [translateX, isSwipedOpen]);
+
+  const handleCardPress = useCallback(() => {
+    if (handledLongPressRef.current) {
+      handledLongPressRef.current = false;
+      return;
+    }
+    if (isSwipedOpen.value) {
+      closeSwipe();
+      return;
+    }
+    onPress();
+  }, [closeSwipe, isSwipedOpen, onPress]);
+
+  const handlePinPress = useCallback(() => {
+    closeSwipe();
+    onTogglePin?.(memo);
+  }, [closeSwipe, memo, onTogglePin]);
+
+  const handleDeletePress = useCallback(() => {
+    closeSwipe();
+    onDelete?.(memo);
+  }, [closeSwipe, memo, onDelete]);
+
+  const leftSwipeGesture = Gesture.Pan()
+    .enabled(!selectionMode)
+    .activeOffsetX([-15, 0])
+    .failOffsetX([0, 15])
+    .failOffsetY([-20, 20])
+    .onUpdate((e) => {
+      const base = isSwipedOpen.value ? -SWIPE_ACTIONS_WIDTH : 0;
+      const current = base + e.translationX;
+      translateX.value = Math.max(-SWIPE_ACTIONS_WIDTH, Math.min(0, current));
+    })
+    .onEnd((e) => {
+      const willOpen = resolveCardSwipe({
+        translationX: e.translationX,
+        velocityX: e.velocityX,
+        actionWidth: SWIPE_ACTIONS_WIDTH,
+        isCurrentlyOpen: isSwipedOpen.value,
+      });
+      if (willOpen) {
+        translateX.value = withSpring(-SWIPE_ACTIONS_WIDTH, { damping: 20, stiffness: 220, mass: 0.8 });
+        isSwipedOpen.value = true;
+      } else {
+        translateX.value = withSpring(0, { damping: 20, stiffness: 220, mass: 0.8 });
+        isSwipedOpen.value = false;
+      }
+    });
+
   const rightClickGesture = Gesture.Tap()
     .mouseButton(MouseButton.RIGHT)
     .runOnJS(true)
     .onEnd((event, success) => {
       if (success && event.pointerType === PointerType.MOUSE && !selectionMode) onLongPress?.();
     });
+
+  const cardGesture = Gesture.Simultaneous(leftSwipeGesture, rightClickGesture);
+
+  const cardAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
   return (
-    <GestureDetector gesture={rightClickGesture}>
-      <View
-        style={[
-          styles.memoCard,
-          listDensity === "compact" && styles.memoCardCompact,
-          selected && styles.memoCardSelected,
-        ]}
-      >
-        {selectionMode ? (
+    <View style={[styles.memoCardWrapper, listDensity === "compact" && styles.memoCardWrapperCompact]}>
+      {/* Background Swipe Actions */}
+      <View style={styles.memoSwipeActions}>
+        {onTogglePin ? (
           <Pressable
-            accessibilityLabel={`${selected ? "取消选择" : "选择"} ${memoTitle}`}
+            accessibilityLabel={memo.isPinned ? "取消星标" : "星标"}
             accessibilityRole="button"
-            accessibilityState={{ selected }}
-            onPress={onPress}
-            style={styles.memoSelectionButton}
+            onPress={handlePinPress}
+            style={[styles.memoSwipeBtn, styles.memoSwipeBtnPin]}
           >
-            <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorActive]}>
-              {selected ? <Check color="#ffffff" size={14} /> : null}
-            </View>
+            <Sparkles color="#ffffff" size={18} />
+            <Text style={styles.memoSwipeBtnText}>
+              {memo.isPinned ? "取消星标" : "星标"}
+            </Text>
           </Pressable>
         ) : null}
-        <Pressable
-          accessibilityHint={selectionMode ? undefined : getMobileCatalog(resolvedLocale).mobile.notes.selectHint}
-          accessibilityLabel={memoTitle}
-          accessibilityRole="button"
-          delayLongPress={520}
-          onLongPress={onLongPress ? () => {
-            handledLongPressRef.current = true;
-            onLongPress();
-          } : undefined}
-          onPress={() => {
-            if (handledLongPressRef.current) {
-              handledLongPressRef.current = false;
-              return;
-            }
-            onPress();
-          }}
-          style={[styles.memoCardContent, listDensity === "compact" && styles.memoCardContentCompact, selectionMode && styles.memoCardContentWithSelection]}
-        >
-          <View style={styles.memoCardTop}>
-            {memo.isPinned ? (
-              <Text accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.memoPinnedStar}>★</Text>
-            ) : null}
-            <Text numberOfLines={1} style={styles.memoTitle}>
-              {memoTitle}
-            </Text>
-          </View>
-          {listDensity === "preview" ? (
-            <Text numberOfLines={2} style={styles.memoExcerpt}>
-              {memo.excerpt || "空笔记"}
-            </Text>
-          ) : null}
-          <View style={[styles.memoMeta, listDensity === "compact" && styles.memoMetaCompact]}>
-            <Text style={styles.memoDate}>{listTimestampKind} {listTimestampLabel}</Text>
-            {memo.tags.slice(0, 3).map((tag) => (
-              <Text key={tag} style={styles.tag}>
-                #{tag}
-              </Text>
-            ))}
-          </View>
-        </Pressable>
+        {onDelete ? (
+          <Pressable
+            accessibilityLabel="删除笔记"
+            accessibilityRole="button"
+            onPress={handleDeletePress}
+            style={[styles.memoSwipeBtn, styles.memoSwipeBtnDelete]}
+          >
+            <Trash2 color="#ffffff" size={18} />
+            <Text style={styles.memoSwipeBtnText}>删除</Text>
+          </Pressable>
+        ) : null}
       </View>
-    </GestureDetector>
+
+      {/* Foreground Memo Card */}
+      <GestureDetector gesture={cardGesture}>
+        <Animated.View
+          style={[
+            styles.memoCard,
+            listDensity === "compact" && styles.memoCardCompact,
+            selected && styles.memoCardSelected,
+            cardAnimatedStyle,
+          ]}
+        >
+          {selectionMode ? (
+            <Pressable
+              accessibilityLabel={`${selected ? "取消选择" : "选择"} ${memoTitle}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={onPress}
+              style={styles.memoSelectionButton}
+            >
+              <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorActive]}>
+                {selected ? <Check color="#ffffff" size={14} /> : null}
+              </View>
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityHint={selectionMode ? undefined : getMobileCatalog(resolvedLocale).mobile.notes.selectHint}
+            accessibilityLabel={memoTitle}
+            accessibilityRole="button"
+            delayLongPress={520}
+            onLongPress={onLongPress ? () => {
+              handledLongPressRef.current = true;
+              onLongPress();
+            } : undefined}
+            onPress={handleCardPress}
+            style={[styles.memoCardContent, listDensity === "compact" && styles.memoCardContentCompact, selectionMode && styles.memoCardContentWithSelection]}
+          >
+            <View style={styles.memoCardTop}>
+              {memo.isPinned ? (
+                <Text accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.memoPinnedStar}>★</Text>
+              ) : null}
+              <Text numberOfLines={1} style={styles.memoTitle}>
+                {memoTitle}
+              </Text>
+            </View>
+            {listDensity === "preview" ? (
+              <Text numberOfLines={2} style={styles.memoExcerpt}>
+                {memo.excerpt || "空笔记"}
+              </Text>
+            ) : null}
+            <View style={[styles.memoMeta, listDensity === "compact" && styles.memoMetaCompact]}>
+              <Text style={styles.memoDate}>{listTimestampKind} {listTimestampLabel}</Text>
+              {memo.tags.slice(0, 3).map((tag) => (
+                <Text key={tag} style={styles.tag}>
+                  #{tag}
+                </Text>
+              ))}
+            </View>
+          </Pressable>
+        </Animated.View>
+      </GestureDetector>
+    </View>
   );
 }, (previous, next) =>
   previous.memo === next.memo &&
   previous.listDensity === next.listDensity &&
   previous.sortMode === next.sortMode &&
   previous.selected === next.selected &&
-  previous.selectionMode === next.selectionMode
+  previous.selectionMode === next.selectionMode &&
+  previous.onDelete === next.onDelete &&
+  previous.onTogglePin === next.onTogglePin
 );
