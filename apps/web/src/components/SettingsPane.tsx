@@ -32,7 +32,8 @@ import { DataExportCard } from "./settings/DataExportCard";
 import { DesktopLocalDataCard } from "./settings/DesktopLocalDataCard";
 import { LoginDevicesCard } from "./settings/LoginDevicesCard";
 import { ShareManagementCard } from "./settings/ShareManagementCard";
-import { EvernoteImportGuideCard } from "./settings/EvernoteImportGuideCard";
+import { ThirdPartyImportCard } from "./settings/ThirdPartyImportCard";
+import type { NoteImportController } from "@/lib/note-import/controller";
 import { FeedbackLink } from "./settings/FeedbackLink";
 import { SystemInfoPanel } from "./settings/SystemInfoPanel";
 import { McpConfigCard } from "./settings/McpConfigCard";
@@ -73,6 +74,7 @@ interface SettingsPaneProps {
   isOwner: boolean;
   user: AuthUser | null;
   refreshWorkspaceAfterImport: () => Promise<void>;
+  noteImport: NoteImportController;
   onOpenExecutionCenter: () => void;
   onOpenMemo: (memoId: string, notebookId: string) => void;
 }
@@ -110,6 +112,7 @@ export const SettingsPane = ({
   isOwner,
   user,
   refreshWorkspaceAfterImport,
+  noteImport,
   onOpenExecutionCenter,
   onOpenMemo,
 }: SettingsPaneProps) => {
@@ -190,7 +193,7 @@ export const SettingsPane = ({
   const activeTab = selectedTab ?? "general";
   const activeMobileTab = selectedTab;
 
-  const mobileTabItems = tabItems.filter((item) => item.key !== "shortcuts");
+  const mobileTabItems = tabItems.filter((item) => item.key !== "shortcuts" || import.meta.env.DEV);
 
   const handleBack = () => {
     if (window.matchMedia("(max-width: 1023px)").matches && activeMobileTab !== null) {
@@ -252,7 +255,7 @@ export const SettingsPane = ({
         return (
           <SettingsGroup>
             {window.edgeeverDesktop?.backup ? <DesktopScheduledBackupCard /> : <DataExportCard refreshWorkspaceAfterImport={refreshWorkspaceAfterImport} />}
-            <EvernoteImportGuideCard />
+            <ThirdPartyImportCard controller={noteImport} onOpenMemo={onOpenMemo} />
           </SettingsGroup>
         );
       case "sharing":

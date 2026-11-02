@@ -1,4 +1,5 @@
 import { AI_ASSISTANT_LAUNCHER_POSITION } from "@/lib/ai-assistant-launcher";
+import { editorClipboardTextSerializer } from "@/lib/editor-clipboard";
 import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, lazy, Suspense, type CSSProperties, type FocusEvent as ReactFocusEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
@@ -27,6 +28,7 @@ import {
   Share2,
   Globe,
   Copy,
+  AppWindow,
   CopyPlus,
   Lock,
   LockOpen,
@@ -71,6 +73,7 @@ import {
   ImageUploadPlaceholderExtension,
   addImageUploadPlaceholder,
   createResourceUploadPlaceholder,
+  getImageUploadPlaceholderPosition,
   removeImageUploadPlaceholder,
   waitForImageSourceReady,
   updateImageUploadPlaceholder,
@@ -160,7 +163,7 @@ import { NEW_IMAGE_WIDTH_PERCENT } from "@edgeever/shared/image-display";
 import { EdgeEverLink } from "@edgeever/shared/editor-link";
 import { createEdgeEverMathematics } from "@edgeever/shared/mathematics";
 import { codeBlockLowlight, EdgeEverCodeBlock } from "@/lib/code-block";
-import { shouldUploadWithPicGo, uploadImageWithPicGo } from "@/lib/picgo";
+import { activeExternalImageHost, uploadImageWithPicGo } from "@/lib/picgo";
 import { compressImageForUpload } from "@/lib/image-compression";
 import { LOCAL_DATABASE_INTERRUPTED_EVENT, localDb, selectNewestLocalDraft, type MemoUpdateSyncPayload } from "@/lib/local-db";
 import { persistEmergencyDraft, readEmergencyDraft, removeEmergencyDraft } from "@/lib/emergency-draft";
@@ -346,6 +349,10 @@ type EditorPaneProps = {
   onMobileDefaultEditConsumed: () => void;
   onSaveAsTemplate: (memo: MemoDetail, name: string) => Promise<void>;
   onDuplicateMemo?: (memo: MemoDetail) => void;
+  /** Desktop only: move this note to its own window. */
+  onOpenInNewWindow?: (memoId: string) => void;
+  /** Receives a function that saves pending edits and reports whether nothing is left unsaved. */
+  onRegisterPendingSave?: (save: (() => Promise<boolean>) | null) => void;
   searchFocusToken: number;
   replaceFocusToken: number;
   aiAssistantOpenToken: number;
@@ -425,6 +432,8 @@ const RichEditorPane = ({
   onMobileDefaultEditConsumed,
   onSaveAsTemplate,
   onDuplicateMemo,
+  onOpenInNewWindow,
+  onRegisterPendingSave,
   onCreatePoster,
   searchFocusToken,
   replaceFocusToken,
@@ -602,7 +611,7 @@ const RichEditorPane = ({
   }, []);
   const noteLinkResultsQuery = useQuery({
     queryKey: ["memo-link-search", noteLinkQuery],
-    queryFn: () => repository.listMemos({ q: noteLinkQuery, limit: 20 }),
+    queryFn: () => repository.listMemos({ q: noteLinkQuery, limit: 20, includeTotal: false }),
     enabled: noteLinkPickerOpen,
   });
   const [editorScrollContainer, setEditorScrollContainer] = useState<HTMLDivElement | null>(null);
@@ -815,7 +824,7 @@ const RichEditorPane = ({
       getCurrentMemoId: () => memoRef.current?.id ?? null,
       getLabels: () => noteLinkSuggestionLabelsRef.current,
       searchMemos: async (query) => {
-        const result = await repository.listMemos({ q: query, limit: 20 });
+        const result = await repository.listMemos({ q: query, limit: 20, includeTotal: false });
         return result.memos;
       },
     });
@@ -1006,12 +1015,14 @@ const RichEditorPane = ({
   const uploadEditorResource = useCallback(async (targetMemoId: string, uploadFile: File, isImage: boolean) => {
     const mimeType = resolveResourceUploadMimeType(uploadFile.name, uploadFile.type);
     if (mimeType !== uploadFile.type) uploadFile = new File([uploadFile], uploadFile.name, { type: mimeType, lastModified: uploadFile.lastModified });
-    if (isImage && shouldUploadWithPicGo()) {
+    const imageHost = isImage ? activeExternalImageHost() : null;
+    if (imageHost) {
       const instanceKey = editorInstanceMemoIdentityRef.current.instanceKey;
+      const failure = imageHost === "imgbed" ? "settings.picgo.imgbed" : "settings.picgo";
       const external = await uploadImageWithPicGo(uploadFile, {
-        title: t("settings.picgo.failedTitle"), message: t("settings.picgo.failedMessage"),
+        title: t(`${failure}.failedTitle`), message: t(`${failure}.failedMessage`),
         retry: t("settings.picgo.retry"), fallback: t("settings.picgo.fallback"), cancel: t("settings.picgo.cancel"),
-      });
+      }, { memoId: targetMemoId });
       // PicGo or its failure dialog may outlive the original note/instance.
       if (memoRef.current?.id !== targetMemoId || editorInstanceMemoIdentityRef.current.instanceKey !== instanceKey) {
         throw new Error("The active note changed during image upload");
@@ -1050,7 +1061,7 @@ const RichEditorPane = ({
     }
   }, [repository, t]);
 
-  const insertResourceFiles = useCallback((files: File[]) => {
+  const insertResourceFiles = useCallback((files: File[], dropPosition?: number) => {
     const currentMemo = memoRef.current;
     const currentEditor = editorRef.current;
 
@@ -1067,7 +1078,7 @@ const RichEditorPane = ({
       memoRef.current?.id,
     );
     const interactionVersionAtRequest = editorCanvasInteractionVersionRef.current;
-    const placeholderPosition = currentEditor.state.selection.from;
+    const placeholderPosition = dropPosition ?? currentEditor.state.selection.from;
     const placeholderByFile = new Map(files.map((file) => [file,
       createResourceUploadPlaceholder(file, {
         imagePreparing: t("editor.uploadState.imagePreparing"),
@@ -1095,7 +1106,7 @@ const RichEditorPane = ({
 
         // Read the selection only after earlier resource insertions complete.
         // Rapid consecutive pastes otherwise race with the same stale cursor.
-        const insertionTarget = getResourceInsertionTarget(insertionEditor.state.selection);
+        const insertionTarget = dropPosition ?? getResourceInsertionTarget(insertionEditor.state.selection);
         setImageUploadState("uploading");
         const imageReadiness: Promise<void>[] = [];
 
@@ -1182,8 +1193,16 @@ const RichEditorPane = ({
         });
 
         if (content.length > 0) {
+          // Drop anchors follow every document transaction, including edits made
+          // while this upload was queued. Never fall back to an unrelated caret
+          // if the user deleted the drop location or reset the document.
+          const mappedDropPosition = dropPosition === undefined ? undefined
+            : getImageUploadPlaceholderPosition(activeEditor.state, placeholders[0]!.id);
+          if (mappedDropPosition === null) {
+            throw new Error("The attachment drop location no longer exists");
+          }
           const safeInsertionTarget = clampResourceInsertionTarget(
-            insertionTarget,
+            mappedDropPosition ?? insertionTarget,
             activeEditor.state.doc.content.size,
           );
           const updateSelection = shouldSelectInsertedResources(
@@ -1238,7 +1257,7 @@ const RichEditorPane = ({
   }, [markDirtyStatus, queryClient, resourceInsertionLimit, t, uploadEditorResource]);
 
   const pluginEmbedExtension = useMemo(() => createPluginEmbedExtension(pluginHost), [pluginHost]);
-  const inlineFieldExtension = useMemo(() => createInlineFieldExtension(i18n.language), [i18n.language]);
+  const inlineFieldExtension = useMemo(() => createInlineFieldExtension(i18n.getFixedT(i18n.language)), [i18n, i18n.language]);
   const editor = useEditor({
     extensions: [
       ...createEdgeEverDocumentExtensions({
@@ -1277,6 +1296,7 @@ const RichEditorPane = ({
       : { type: "doc", content: [{ type: "paragraph" }] },
     editable: Boolean(memo && !effectiveReadOnly && editorIsHydratedForCurrentMemo),
     editorProps: {
+      clipboardTextSerializer: editorClipboardTextSerializer,
       attributes: {
         class: "edgeever-note-rich-editor prose prose-slate max-w-none focus:outline-none min-h-[240px] lg:min-h-[180px]",
         spellcheck: spellcheckEnabled ? "true" : "false",
@@ -1424,7 +1444,12 @@ const RichEditorPane = ({
         }
 
         event.preventDefault();
-        insertResourceFiles(getResourceFilesFromDataTransfer(event.dataTransfer));
+        // Use the same coordinate lookup as ProseMirror's external drop cursor.
+        // A drop inserts at a point; it must never replace the old text selection.
+        const dropPosition = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        if (dropPosition) {
+          insertResourceFiles(getResourceFilesFromDataTransfer(event.dataTransfer), dropPosition.pos);
+        }
         return true;
       },
     },
@@ -3169,6 +3194,41 @@ const RichEditorPane = ({
   const mutateSave = saveMutation.mutate;
   const mutateSaveAsync = saveMutation.mutateAsync;
   const saveMutationPending = saveMutation.isPending;
+  const saveMutationPendingRef = useRef(saveMutationPending);
+  saveMutationPendingRef.current = saveMutationPending;
+
+  // Used before the note moves to another window or its window closes: wait
+  // for a save in flight, then save what is left. A conflict or storage error
+  // reports false so the caller keeps the note where it is.
+  const savePendingEdits = async () => {
+    if (!memoRef.current || memoRef.current.isDeleted) return true;
+    persistCurrentDraft();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      for (let waited = 0; saveMutationPendingRef.current && waited < 15_000; waited += 50) {
+        await new Promise((resolve) => window.setTimeout(resolve, 50));
+      }
+      if (saveMutationPendingRef.current) return false;
+      if (!hasUnsavedChangesRef.current) return true;
+      try {
+        // Storage that stops answering must surface as a failed handover, not a hang.
+        const saved = await Promise.race([
+          mutateSaveAsync().then(() => true),
+          new Promise<false>((resolve) => window.setTimeout(() => resolve(false), 15_000)),
+        ]);
+        if (!saved) return false;
+      } catch {
+        return !hasUnsavedChangesRef.current;
+      }
+    }
+    return !hasUnsavedChangesRef.current;
+  };
+  const savePendingEditsRef = useRef(savePendingEdits);
+  savePendingEditsRef.current = savePendingEdits;
+  useEffect(() => {
+    if (!onRegisterPendingSave) return;
+    onRegisterPendingSave(() => savePendingEditsRef.current());
+    return () => onRegisterPendingSave(null);
+  }, [onRegisterPendingSave]);
 
   const editorShortcutBlocked = Boolean(
     historyOpen ||
@@ -3913,7 +3973,6 @@ const RichEditorPane = ({
     && !phonePreviewOpen;
   const outlineReservesSpace = showDocumentOutline && !editorOutlineCollapsed;
   const compactEditorReadingGutter = shouldCompactEditorReadingGutter({
-    aiAssistantOpen,
     desktopColumn: isDesktopColumn,
     columnWidth: Math.max(0, editorColumnWidth - editorScrollbarGutter * 2),
     articleMaxWidth: Number.parseInt(EDITOR_CONTENT_MAX_WIDTH, 10),
@@ -3956,7 +4015,9 @@ const RichEditorPane = ({
             to: stored?.to ?? draft.to,
             pos: stored?.pos ?? draft.pos,
           });
-          editor.chain().focus(stored?.from ?? draft.from ?? null, { scrollIntoView: true }).run();
+          // Keep the selection the insert left after the formula; focusing
+          // `from` put the caret back in front of it, so typing went there.
+          editor.chain().focus(null, { scrollIntoView: true }).run();
         }}
         onRemove={
           mathFormulaDraft && typeof mathFormulaDraft.pos === "number"
@@ -4309,6 +4370,17 @@ const RichEditorPane = ({
                   >
                     <CopyPlus className="h-4 w-4 text-slate-500" />
                     {t("editor.duplicate")}
+                  </DropdownMenuItem>
+                )}
+                {onOpenInNewWindow && (
+                  <DropdownMenuItem
+                    className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
+                    // A note created offline gets its permanent ID on first sync.
+                    disabled={isLocalMemoId(memo.id)}
+                    onClick={() => onOpenInNewWindow(memo.id)}
+                  >
+                    <AppWindow className="h-4 w-4 text-slate-500" />
+                    {t(isLocalMemoId(memo.id) ? "editor.openInNewWindowAfterSync" : "editor.openInNewWindow")}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
@@ -4720,6 +4792,7 @@ const RichEditorPane = ({
         </ClipboardCopyNotice>
       )}
 
+      {/* Overlay the article/outline; horizontal space belongs to the document. */}
       {!effectiveReadOnly && !aiAssistantOpen ? (
         <IconTooltip
           side="left"

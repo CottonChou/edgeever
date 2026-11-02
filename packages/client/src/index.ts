@@ -1,3 +1,4 @@
+import type { ImportMemosInput, ImportMemosResponse } from "@edgeever/shared/note-import/types";
 import type { NotebookUpdateInput } from "@edgeever/shared";
 import {
   parsePreparedAiGeneration,
@@ -109,6 +110,9 @@ export type MultipartResourceUploadSource = {
   mimeType: string;
   byteSize: number;
   readPart: (start: number, end: number) => Promise<Blob | Uint8Array<ArrayBuffer>>;
+  /** Importers use this to distinguish an uncertain commit from a failed part. */
+  onBeforeComplete?: () => void | Promise<void>;
+  onPartUploaded?: (byteSize: number) => void;
 };
 
 export type InstanceHealth = {
@@ -146,7 +150,7 @@ export type ListNotebooksResponse = {
 
 export type ListMemosResponse = {
   memos: MemoSummary[];
-  totalCount: number;
+  totalCount?: number;
   nextCursor: string | null;
 };
 
@@ -276,8 +280,9 @@ export type ResourceUploadResponse = {
 export type MarkdownExportPage = {
   memos: MemoDetail[];
   resources: Resource[];
-  totalCount: number;
+  totalCount?: number;
   nextOffset: number | null;
+  nextCursor?: string | null;
 };
 
 export type JsonBackupPage = MarkdownExportPage & {
@@ -530,6 +535,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
                 body: chunk,
               },
             );
+            source.onPartUploaded?.(Math.min(partNumber * upload.partSize, source.byteSize));
             break;
           } catch (error) {
             attempt += 1;
@@ -542,6 +548,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
           }
         }
       }
+      await source.onBeforeComplete?.();
       return await request<ResourceResponse>(
         `/api/v1/resource-uploads/${encodeURIComponent(upload.id)}/complete`,
         { method: "POST", body: JSON.stringify({}) },
@@ -1143,7 +1150,10 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
 
     syncBootstrap: (params?: { afterId?: string | null; limit?: number }) => {
       const search = new URLSearchParams();
-      if (params?.afterId) search.set("afterId", params.afterId);
+      if (params?.afterId) {
+        search.set("afterId", params.afterId);
+        search.set("includeMetadata", "0");
+      }
       if (params?.limit) search.set("limit", String(params.limit));
       const suffix = search.toString() ? `?${search.toString()}` : "";
       return request<SyncBootstrapResponse>(`/api/v1/sync/bootstrap${suffix}`);
@@ -1159,6 +1169,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
       const search = new URLSearchParams({ limit: String(limit) });
       if (afterId) {
         search.set("afterId", afterId);
+        search.set("includeMetadata", "0");
       }
       return request<MobileSyncBootstrapPage>(`/api/v1/sync/bootstrap?${search.toString()}`);
     },
@@ -1216,6 +1227,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
 
     listMemos: (params: {
       notebookId?: string | null;
+      includeTotal?: boolean;
       includeDescendants?: boolean;
       q?: string;
       tag?: string;
@@ -1263,8 +1275,13 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
         search.set("limit", String(params.limit));
       }
 
+      if (params.includeTotal === false) search.set("includeTotal", "0");
       return request<ListMemosResponse>(`/api/v1/memos?${search.toString()}`);
     },
+
+    getImportCapabilities: () => request<{ protocolVersion: number; maxBatchSize: number; formats: string[]; importContext: string; accountId: string | null }>("/api/v1/imports/capabilities"),
+
+    importMemos: (payload: ImportMemosInput) => request<ImportMemosResponse>("/api/v1/imports/memos", { method: "POST", body: JSON.stringify(payload) }),
 
     createMemo: (payload: {
       notebookId: string;
@@ -1460,7 +1477,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
         body: JSON.stringify({}),
       }),
 
-    updateMemoShare: (memoId: string, payload: { passwordProtected?: boolean; slug?: string | null }) =>
+    updateMemoShare: (memoId: string, payload: { passwordProtected?: boolean; password?: string; slug?: string | null; showUpdatedAt?: boolean; showBranding?: boolean; expiresAt?: string | null }) =>
       request<{ share: MemoShare }>(`/api/v1/memos/${memoId}/share`, {
         method: "PATCH",
         body: JSON.stringify(payload),
@@ -1541,7 +1558,7 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
         method: "DELETE",
       }),
 
-    getMarkdownExportPage: (offset = 0, limit = 50, memoIds?: string[]) => {
+    getMarkdownExportPage: (offset = 0, limit = 50, memoIds?: string[], cursor?: string) => {
       const search = new URLSearchParams({
         offset: String(offset),
         limit: String(limit),
@@ -1549,11 +1566,17 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
       if (memoIds && memoIds.length > 0) {
         search.set("ids", memoIds.join(","));
       }
+      if (offset > 0) search.set("includeTotal", "0");
+      if (cursor !== undefined) search.set("cursor", cursor);
       return request<MarkdownExportPage>(`/api/v1/exports/markdown?${search.toString()}`);
     },
 
-    getJsonBackupPage: (offset = 0, limit = 25) =>
-      request<JsonBackupPage>(`/api/v1/backups/json?offset=${offset}&limit=${limit}`),
+    getJsonBackupPage: (offset = 0, limit = 25, cursor?: string) => {
+      const search = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+      if (offset > 0) search.set("includeTotal", "0");
+      if (cursor !== undefined) search.set("cursor", cursor);
+      return request<JsonBackupPage>(`/api/v1/backups/json?${search}`);
+    },
 
     restoreJsonNotebooks: (notebooks: JsonBackupNotebook[]) =>
       request<{ ok: true }>("/api/v1/restores/json/notebooks", {
@@ -1695,6 +1718,8 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
         contentJson?: TiptapDoc;
         contentMarkdown?: string;
         tags?: string[];
+        createdAt?: string;
+        updatedAt?: string;
         allowDestructiveOverwrite?: boolean;
       }
     ) =>

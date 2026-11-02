@@ -1,4 +1,7 @@
 import { mergeAttributes, Node } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Slice } from "@tiptap/pm/model";
+import { ReplaceAroundStep } from "@tiptap/pm/transform";
 import { openBlockSource } from "./markdown-block-start";
 import type { TiptapDoc, TiptapNode, TiptapTextNode } from "./content";
 import { parseImageAlignment } from "./image-alignment";
@@ -21,6 +24,40 @@ export const resolveImageGalleryLayout = (value: unknown): ImageGalleryLayout =>
     ? (value as ImageGalleryLayout)
     : "auto";
 
+/** The shared schema uses block images, including inside lists and quotes. */
+const normalizeImageParagraphs = (nodes: TiptapNode[]): TiptapNode[] => nodes.flatMap(node => {
+  const content = node.content ? normalizeImageParagraphs(node.content) : undefined;
+  if (!content) return [node];
+  if (node.type === "paragraph" && content.some(child => child.type === "image")) {
+    const blocks: TiptapNode[] = [];
+    let inline: TiptapNode[] = [];
+    const flush = () => { if (inline.length) blocks.push({ ...node, content: inline }); inline = []; };
+    for (const child of content) {
+      if (child.type === "image") { flush(); blocks.push(child); }
+      else inline.push(child);
+    }
+    flush();
+    return blocks;
+  }
+  if ((node.type === "listItem" || node.type === "taskItem") && node.content?.[0]?.type === "paragraph" && content[0]?.type !== "paragraph") content.unshift({ type: "paragraph" });
+  return [{ ...node, content }];
+});
+
+/** A list's required empty first paragraph must not separate its marker from an image. */
+export const prepareImageListsForMarkdown = (doc: TiptapDoc): TiptapDoc => {
+  const visit = (node: TiptapNode): TiptapNode => {
+    if (!node.content) return node;
+    let content = node.content.map(child => child.type === "text" ? child : visit(child));
+    if ((node.type === "listItem" || node.type === "taskItem")
+      && content[0]?.type === "paragraph" && !content[0].content?.length
+      && content[1]?.type === "image") {
+      content = content.slice(1);
+    }
+    return { ...node, content };
+  };
+  return { ...doc, content: doc.content.map(visit) };
+};
+
 /**
  * Width-fit galleries retain the ordinary sequential-image Markdown projection.
  * Height-fit galleries use invisible comments to keep their presentation when
@@ -32,6 +69,10 @@ export const ImageGallery = Node.create({
   content: "image+",
   defining: true,
   isolating: true,
+
+  addProseMirrorPlugins() {
+    return [createImageGalleryCleanupPlugin()];
+  },
 
   addAttributes() {
     return {
@@ -79,7 +120,7 @@ export const ImageGallery = Node.create({
   },
 
   parseMarkdown(token, helpers) {
-    const content = helpers.parseChildren(token.tokens ?? []);
+    const content = normalizeImageParagraphs(helpers.parseChildren(token.tokens ?? []) as TiptapNode[]);
     // A source edit can split a gallery with text. Keep all edited content,
     // rather than forcing non-images into an image-only schema.
     if (content.length < 2 || content.some((child) => child.type !== "image")) return content;
@@ -129,7 +170,7 @@ export const groupConsecutiveImagesIntoGalleries = (nodes: TiptapNode[]): Tiptap
     images = [];
   };
 
-  for (const node of nodes) {
+  for (const node of normalizeImageParagraphs(nodes)) {
     // Explicitly positioned images remain standalone during Markdown import.
     if (node.type === "image" && parseImageAlignment(node.attrs?.alignment)) {
       flushImages();
@@ -153,6 +194,50 @@ const hasUsableImageSource = (node: TiptapNode | TiptapTextNode) =>
   "attrs" in node &&
   typeof node.attrs?.src === "string" &&
   node.attrs.src.trim().length > 0;
+
+/**
+ * Repair galleries emptied or left with one image by a move or deletion, in
+ * the same undoable edit as the node-view, keyboard or range change.
+ */
+export const createImageGalleryCleanupPlugin = () => new Plugin({
+  key: new PluginKey("edgeever-image-gallery-cleanup"),
+  appendTransaction(transactions, _oldState, state) {
+    if (!transactions.some((transaction) => transaction.docChanged)) return null;
+
+    const repairs: Array<{ from: number; to: number; unwrap: boolean }> = [];
+    state.doc.descendants((node, position) => {
+      if (node.type.name !== IMAGE_GALLERY_NODE_TYPE) return;
+      // image+ makes ProseMirror insert an image with src=null when its last
+      // child is deleted. Remove that shell from the live document as well as
+      // saved snapshots. Pending uploads have a nonempty src and stay intact.
+      const images = node.content.content.filter((image) =>
+        typeof image.attrs.src === "string" && image.attrs.src.trim().length > 0
+      );
+      if (!images.length) {
+        repairs.push({ from: position, to: position + node.nodeSize, unwrap: false });
+      } else if (node.childCount === 1 && !isTransientImageUploadSource(images[0]!.attrs.src)) {
+        // A gallery left with one image after a move or deletion would crop it
+        // to the gallery cell. Unwrap it as normalizeImageGalleries() does for
+        // snapshots, so the editor shows the standalone image that is saved.
+        repairs.push({ from: position, to: position + node.nodeSize, unwrap: true });
+      }
+      return false;
+    });
+    if (!repairs.length) return null;
+
+    const transaction = state.tr;
+    for (const { from, to, unwrap } of repairs.reverse()) {
+      if (!unwrap) {
+        transaction.delete(from, to);
+        continue;
+      }
+      // Remove only the wrapper, as lift() would if the gallery were not
+      // isolating, so the image and a selection on it keep their identity.
+      transaction.maybeStep(new ReplaceAroundStep(from, to, from + 1, to - 1, Slice.empty, 0, true));
+    }
+    return transaction.docChanged ? transaction : null;
+  },
+});
 
 type NormalizedNodes = {
   changed: boolean;
